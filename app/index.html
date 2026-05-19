@@ -556,8 +556,8 @@
       baseQbOffset:
         (window.APP_CONFIG && window.APP_CONFIG.baseQbOffset) ?? 0,
       bytesPerFocus: 6,
-      maxFrameBytes: 20,
-      maxFocusCount: Math.floor(20 / 6)
+      maxFrameBytes: 50,
+      maxFocusCount: Math.floor(50 / 6)
     };
 
     // --- DOM ---
@@ -726,7 +726,7 @@
     }
     function addLight(x = stage.offsetWidth / 2, y = stage.offsetHeight / 2) {
         if (lights.length >= CODESYSCONFIG.maxFocusCount) {
-          alert(`Mode live limitat a ${CODESYSCONFIG.maxFocusCount} focus per compatibilitat amb CODESYS (20 bytes).`);
+          alert(`Mode live limitat a ${CODESYSCONFIG.maxFocusCount} focus per compatibilitat amb CODESYS (50 bytes).`);
           return;
         }
         const newLight = { id: getNextAvailableLightId(), x, y, pan: 180, tilt: 0, r: 255, g: 255, b: 255, zoom: 128 };
