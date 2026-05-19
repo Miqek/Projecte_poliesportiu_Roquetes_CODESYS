@@ -1,0 +1,1 @@
+En esta carpeta hay un copia i pega de lo que esta al proyecto de Codesys, para poder entender que hacer para actualizar la aplicación a 50 bytes i los pasos a realizar.

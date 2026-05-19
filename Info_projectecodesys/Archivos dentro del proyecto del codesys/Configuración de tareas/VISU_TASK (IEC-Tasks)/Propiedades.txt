@@ -1,0 +1,3 @@
+Prioridad: 31
+Tipo: Cíclo
+Intervalo: 200 ms

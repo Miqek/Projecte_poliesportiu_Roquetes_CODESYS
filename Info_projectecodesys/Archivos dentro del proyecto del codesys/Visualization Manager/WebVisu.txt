@@ -1,0 +1,9 @@
+Visualización de arranque: Vis_main
+Nombre del archivo .htm: webvisu
+Visualitzación de inicio de sesión: nan
+Frecuencia de actualización (ms): 200
+Tamaño del búfer de comunicaciones estándar: 50000
+Opciones de escalado. anisótropo, utilzaropciones de escalado para cuadros de diálogo
+Opciones de presentación: representar "antialased"
+Opciones de tratamiento de entrada: pantalla táctil
+Tratar el toque como eventos de ratón.

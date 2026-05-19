@@ -1,0 +1,105 @@
+PROGRAM COMMS
+VAR
+	//-- socket client (connexió amb servidor)
+	TCP_Client_0: NBS.TCP_Client;
+	xEnable: BOOL := TRUE;
+	IP_ : NBS.IPv4Address := (ipAddress := '127.0.0.1');
+	xEnableRead : BOOL := FALSE;
+		
+	bytesToServer : ARRAY[0..49] OF BYTE;
+	bytesFromServer : ARRAY[0..49] OF BYTE;
+	
+	pbyte_out : POINTER TO BYTE;
+	
+	TCP_Write_0: NBS.TCP_Write;
+	itfConnection: NBS.IConnection;
+	xExecute: BOOL := FALSE;
+	
+	TCP_Read_0: NBS.TCP_Read;
+
+	i : INT;
+	j : INT;
+	
+	// : BYTE_TO_BOOL_ARRAY;
+	IX : ARRAY[0..8,0..49] OF INT;
+	QX : ARRAY[0..8,0..49] OF INT;
+	temp_bool_array : ARRAY[0..7] OF BOOL;	
+	array_assign : ARRAY[0..7] OF BOOL;
+	
+END_VAR
+
+VAR CONSTANT
+	SIZE_BUFER_EIXIDA : UINT := 10;
+END_VAR
+
+-----------------------------
+
+//-- comença a enviar trames TCP quan s'ahbilita el servidor
+	IF xEnable THEN
+		xExecute := NOT xExecute;
+		xEnableRead := NOT xEnableRead;		
+	END_IF
+
+//-- prepara el vector de bytes per a enviar al servidor a partir de les eixides físiques del PLC
+	(*pbyte_out := ADR(%QB0); //-- no es pot accedir directament a les eixides físiques per a fer el for...
+	FOR i := 0 TO 9 DO
+		bytesToServer[i] := pbyte_out^; //-- seria equivalent a bytesToServer[i] := %QX[i]...
+		pbyte_out := pbyte_out + 1;
+	END_FOR*)
+	
+	//-- assigna variables d'eixida a eixides físiques del plc
+	SysMemCpy(ADR(bytesToServer), ADR(%QB0), 50);
+	
+	//-- matriu per a visualització
+	FOR i := 0 TO 49 DO
+		temp_bool_array := BYTE_TO_BOOL_ARRAY(byte_in := bytesToServer[i]);
+		FOR j := 0 TO 8 DO
+			IF j = 8 THEN
+				QX[j, i] := bytesToServer[i];
+			ELSE
+				QX[j, i] := BOOL_TO_INT(temp_bool_array[j]);
+			END_IF
+        	
+    	END_FOR
+	END_FOR
+	
+
+//-- connecta amb servidor
+	TCP_Client_0(
+		xEnable := xEnable,
+		itfIPAddress := IP_,
+		uiPort := 23451,
+		itfConnection => itfConnection
+		);
+	
+//-- envia dades a servidor
+	TCP_Write_0(
+		xExecute := xExecute,
+		itfConnection := itfConnection,
+		pData := ADR(bytesToServer),
+		udiSize := TO_UDINT(SIZEOF(bytesToServer))
+		);
+		
+//-- llig dades de servidor	
+	TCP_Read_0(
+		xEnable := xEnableRead,
+		itfConnection := itfConnection,
+		pData := ADR(bytesFromServer),
+		udiSize := SIZEOF(bytesFromServer),
+		);
+		
+//-- descomposa l'array rebut en un vector bool de 8 bits
+
+	FOR i := 0 TO 49 DO
+		temp_bool_array := BYTE_TO_BOOL_ARRAY(byte_in := bytesFromServer[i]);
+		FOR j := 0 TO 8 DO
+			IF j = 8 THEN
+				IX[j, i] := bytesFromServer[i];
+			ELSE
+				IX[j, i] := BOOL_TO_INT(temp_bool_array[j]);
+			END_IF
+    	END_FOR
+	END_FOR
+	
+//-- link a entrades físiques del PLC
+	SysMemCpy(ADR(%IB0),ADR(bytesFromServer[0]),50);

@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMI Simulador Avançat V2.0 - CoDeSys Export</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #stage {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background-color: #111827;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,1);
+            user-select: none;
+            cursor: crosshair;
+        }
+
+        .rigging {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background-color: #374151;
+            border: 2px solid #9CA3AF;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.1s;
+        }
+        .rigging:active { cursor: grabbing; }
+        .rigging.selected {
+            border-color: #3B82F6;
+            box-shadow: 0 0 15px #3B82F6, 0 4px 6px rgba(0,0,0,0.5);
+            background-color: #1E3A8A;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .light-beam {
+            position: absolute;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: screen;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .coverage-ring {
+            position: absolute;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 8;
+            border: 2px dashed rgba(96, 165, 250, 0.45);
+            background: radial-gradient(circle, rgba(96, 165, 250, 0.10) 0%, rgba(96, 165, 250, 0.04) 55%, rgba(96, 165, 250, 0.00) 70%);
+        }
+
+        /* Calibration marks (missing in original) */
+        .calibration-mark {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: #10B981;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 25;
+            pointer-events: none;
+        }
+        .calibration-line {
+            position: absolute;
+            height: 2px;
+            background-color: #10B981;
+            transform-origin: left center;
+            z-index: 24;
+            pointer-events: none;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0.375rem; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        #export-modal { display: none; backdrop-filter: blur(4px); }
+        #export-modal.flex { display: flex; }
+
+        #targeting-banner {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 30;
+            display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; box-shadow: 0 0 15px #3B82F6; }
+            100% { opacity: 0.8; }
+        }
+
+        /* V2.0: Transition config panel styling */
+        #transition-config-panel input[type="range"] {
+            height: 6px;
+        }
+        .curve-legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-4 md:p-8">
+
+<div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Capçalera -->
+    <header class="flex flex-col md:flex-row justify-between items-center bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-1">Simulador HMI Multipunt
+                <span class="text-lg font-semibold text-orange-400 ml-2">V2.0</span>
+            </h1>
+            <p class="text-gray-400">Interpolació suau • Corba de transició • Exportació CoDeSys (Llista_V/H/R/G/B/F/T)</p>
+        </div>
+        <div class="mt-4 md:mt-0 flex flex-wrap gap-3 items-center justify-end">
+            <div class="flex items-center gap-2 bg-gray-900 border border-gray-600 rounded-md px-3 py-2">
+                <span class="text-xs text-gray-300">Mode:</span>
+                <span id="codesys-mode-badge" class="text-xs font-bold px-2 py-1 rounded bg-gray-700 text-gray-200">Programació</span>
+            </div>
+            <button id="btn-codesys-connect" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm transition font-bold">
+                Connectar CODESYS
+            </button>
+            <span id="codesys-status" class="text-xs font-mono text-gray-300 bg-gray-900 border border-gray-600 rounded px-2 py-1">Desconnectat</span>
+            <label class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm transition font-medium cursor-pointer flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                Pujar Plànol
+                <input type="file" id="bg-upload" accept="image/png, image/jpeg" class="hidden">
+            </label>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+        <!-- Panell Esquerre: Propietats del focus -->
+        <div class="bg-gray-800 p-5 rounded-xl shadow-lg border border-gray-700 lg:col-span-1 h-fit flex flex-col">
+
+            <div class="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+                <h2 class="text-lg font-semibold">Propietats</h2>
+                <span id="selected-label" class="bg-blue-900 text-blue-200 text-xs px-2 py-1 rounded font-bold">Cap seleccionat</span>
+            </div>
+
+            <div class="mb-4 p-3 bg-gray-900 border border-gray-700 rounded-lg space-y-2">
+                <h3 class="text-sm text-emerald-400 font-semibold">Connexió Live CODESYS</h3>
+                <p class="text-[11px] text-gray-400 leading-tight">
+                    Canvia aquí la latència i l'offset base de `%QB` per focus (24 bytes per defecte: 4x6).
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="text-xs text-gray-300">Latència ms
+                        <input id="in-codesys-latency" type="number" min="20" step="10" value="50" class="mt-1 w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs">
+                    </label>
+                    <label class="text-xs text-gray-300">Offset base QB
+                        <input id="in-codesys-base-qb" type="number" min="0" step="1" value="0" class="mt-1 w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs">
+                    </label>
+                </div>
+                <p class="text-[11px] text-gray-500">
+                    Endpoint bridge:
+                    <span id="bridge-endpoint-label" class="font-mono"></span>
+                </p>
+            </div>
+
+            <div class="space-y-3 transition-opacity duration-300 flex-1" id="controls-panel" style="opacity: 0.3; pointer-events: none;">
+
+                <h3 class="text-sm text-blue-400 font-medium flex justify-between">
+                    1. Moviment (Pan/Tilt)
+                    <span class="text-xs text-gray-400 font-normal">(Doble Clic)</span>
+                </h3>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label>Horitzontal 0-360° <span class="text-gray-500">(H → 0-255)</span></label>
+                        <span id="val-pan" class="font-mono text-blue-300 font-bold">180</span>
+                    </div>
+                    <input type="range" id="in-pan" min="0" max="360" value="180" class="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label>Vertical 0-90° <span class="text-gray-500">(V → 0-255)</span></label>
+                        <span id="val-tilt" class="font-mono text-blue-300 font-bold">0</span>
+                    </div>
+                    <input type="range" id="in-tilt" min="0" max="90" value="0" class="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <h3 class="text-sm text-pink-400 font-medium mt-6 mb-2">2. Color Visual i RGB</h3>
+
+                <div class="flex items-center gap-4 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700 shadow-inner">
+                    <input type="color" id="in-color-picker" value="#ffffff" class="w-12 h-12 rounded-md cursor-pointer border-2 border-gray-600 p-0 bg-transparent transition hover:border-pink-500">
+                    <div class="flex-1">
+                        <div class="text-xs text-gray-500 font-semibold mb-1">CODI COLOR HEX</div>
+                        <div id="val-hex" class="font-mono text-base text-white font-bold uppercase tracking-wider bg-black px-2 py-1 rounded border border-gray-800 inline-block shadow">#FFFFFF</div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label class="text-red-400">Vermell</label>
+                        <span id="val-r" class="font-mono text-red-400 font-bold">255</span>
+                    </div>
+                    <input type="range" id="in-r" min="0" max="255" value="255" class="w-full accent-red-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label class="text-green-400">Verd</label>
+                        <span id="val-g" class="font-mono text-green-400 font-bold">255</span>
+                    </div>
+                    <input type="range" id="in-g" min="0" max="255" value="255" class="w-full accent-green-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label class="text-blue-400">Blau</label>
+                        <span id="val-b" class="font-mono text-blue-400 font-bold">255</span>
+                    </div>
+                    <input type="range" id="in-b" min="0" max="255" value="255" class="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <h3 class="text-sm text-yellow-400 font-medium mt-6">3. Zoom (Focal)</h3>
+                <div>
+                    <div class="flex justify-between text-xs mb-1 text-gray-300">
+                        <label>Obertura (0-255)</label>
+                        <span id="val-zoom" class="font-mono text-yellow-400 font-bold">128</span>
+                    </div>
+                    <input type="range" id="in-zoom" min="0" max="255" value="128" class="w-full accent-yellow-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div id="scaleTools" class="mt-6 pt-4 border-t border-gray-600 hidden">
+                    <h3 class="text-sm text-emerald-400 font-medium mb-3">4. Escala i cobertura</h3>
+                    <button id="btnCalibrateScale" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm transition font-bold shadow-lg">
+                        Calibrar escala
+                    </button>
+                    <p class="text-[11px] text-gray-400 mt-2 leading-tight">
+                        Prem el botó i fes clic a dos punts de la imatge. Després posa la distància real en metres.
+                    </p>
+                    <div class="mt-4 space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                <label>Distància real dels 2 punts (m)</label>
+                                <span id="val-scale" class="font-mono text-emerald-300 font-bold">-</span>
+                            </div>
+                            <input type="number" id="in-scale-meters" min="0" step="0.01" placeholder="ex: 5" class="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-emerald-500">
+                        </div>
+                        <div class="grid grid-cols-1 gap-3">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                    <label>Altura del focus (m)</label>
+                                    <span id="val-focus-height" class="font-mono text-emerald-300 font-bold">-</span>
+                                </div>
+                                <input type="number" id="in-focus-height" min="0" step="0.01" placeholder="ex: 6" class="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                    <label>Distància màxima horitzontal (m)</label>
+                                    <span id="val-max-horizontal" class="font-mono text-emerald-300 font-bold">-</span>
+                                </div>
+                                <input type="number" id="in-max-horizontal" min="0" step="0.01" placeholder="ex: 12" class="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs space-y-1">
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-400">Escala actual</span>
+                                <span id="val-px-per-meter" class="font-mono text-white">-</span>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-400">Cobertura horitzontal en píxels</span>
+                                <span id="val-horizontal-px" class="font-mono text-white">-</span>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-400">Distància obliqua estimada</span>
+                                <span id="val-slant" class="font-mono text-white">-</span>
+                            </div>
+                            <div class="flex justify-between gap-3">
+                                <span class="text-gray-400">Angle estimat del feix</span>
+                                <span id="val-beam-angle" class="font-mono text-white">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenidor per Editar el Pas Actual -->
+            <div id="update-scene-container" class="mt-5 pt-4 border-t border-gray-600 hidden">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm text-gray-400">Editant actulment el:</span>
+                    <span id="edit-scene-name" class="bg-purple-900 text-purple-200 text-sm px-3 py-1 rounded-md font-bold shadow-inner">Pas 1</span>
+                </div>
+                <button id="btn-update-scene" class="bg-purple-600 hover:bg-purple-500 text-white w-full py-2.5 rounded-md text-sm transition font-bold shadow-lg flex justify-center items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Sobreescriure Pas
+                </button>
+                <p class="text-[10px] text-gray-500 text-center mt-2 leading-tight">Això guardarà la posició i color actuals als paràmetres d'aquest pas.</p>
+            </div>
+        </div>
+
+        <!-- Panell Central -->
+        <div class="lg:col-span-3 space-y-6">
+
+            <!-- Visualitzador 2D -->
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border border-gray-700 relative">
+                <div class="flex justify-between items-center mb-2 px-2 pt-2">
+                    <h2 class="text-lg font-semibold text-gray-200">Plànol del Pavelló</h2>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-delete-light" class="bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-sm transition font-bold flex items-center gap-1 border border-red-500 shadow-md">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-1 12a2 2 0 01-2 2H7a2 2 0 01-2-2L4 7m5 4v6m6-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M3 7h18"></path></svg>
+                            Eliminar Focus
+                        </button>
+                        <button id="btn-add-light" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md text-sm transition font-bold flex items-center gap-1 border border-gray-500 shadow-md">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            Afegir Focus
+                        </button>
+                    </div>
+                </div>
+                <div id="stage" class="border border-gray-600 relative">
+                    <div id="targeting-banner">🎯 MODE APUNTAR: Mou el ratolí per dirigir el focus. Fes clic per fixar.</div>
+                    <svg id="target-line" class="absolute inset-0 w-full h-full pointer-events-none z-15 hidden">
+                        <line id="laser" x1="0" y1="0" x2="0" y2="0" stroke="#60A5FA" stroke-width="2" stroke-dasharray="6,4" opacity="0.8" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Programador d'Escenes -->
+            <div class="bg-gray-800 p-5 rounded-xl shadow-lg border border-gray-700">
+                <div class="flex flex-wrap justify-between items-center mb-4 border-b border-gray-600 pb-3 gap-3">
+                    <h2 class="text-lg font-semibold">Timeline de Secuenciació</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="btn-add-scene" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm transition font-bold shadow-md">
+                            + Guardar COM a NOU Pas
+                        </button>
+                        <button id="btn-play" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-md text-sm transition font-bold shadow-md flex items-center gap-1">
+                            ▶ Reproduir Tot
+                        </button>
+                        <button id="btn-stop" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-md text-sm transition font-bold shadow-md hidden items-center gap-1">
+                            ⏹ Parar Automàtic
+                        </button>
+                        <div class="hidden sm:block w-px h-8 bg-gray-600 mx-2"></div>
+                        <!-- V2.0: Export button updated -->
+                        <button id="btn-export" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-md text-sm transition font-bold shadow-md flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            Llistes CoDeSys V2
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Llista de Passos -->
+                <div class="flex gap-3 overflow-x-auto no-scrollbar py-2 min-h-[80px]" id="scene-list">
+                    <div class="text-gray-500 text-sm italic w-full text-center py-4" id="empty-scenes">
+                        Cap pas guardat. Ajusta la llum i clica "+ Guardar COM a NOU Pas".
+                    </div>
+                </div>
+
+                <!-- ============================================================== -->
+                <!-- V2.0: Panell de configuració de transició entre passos          -->
+                <!-- ============================================================== -->
+                <div id="transition-config-panel" class="mt-4 pt-4 border-t border-orange-900 hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold text-orange-400">
+                            ⚡ Transició: Pas <span id="trans-from-label">1</span> → Pas <span id="trans-to-label">2</span>
+                        </h3>
+                        <span id="trans-samples-badge" class="bg-orange-900 text-orange-200 text-xs px-2 py-1 rounded font-mono">0 mostres</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                <label>Durada total</label>
+                                <span id="val-trans-duration" class="font-mono text-orange-300 font-bold">1000 ms</span>
+                            </div>
+                            <input type="range" id="in-trans-duration" min="50" max="15000" step="50" value="1000"
+                                class="w-full accent-orange-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                <label>Temps mínim mostra</label>
+                                <span id="val-trans-minsample" class="font-mono text-orange-300 font-bold">50 ms</span>
+                            </div>
+                            <input type="range" id="in-trans-minsample" min="50" max="1000" step="10" value="50"
+                                class="w-full accent-orange-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                <label>Acceleració entrada <span class="text-gray-500">(0=linear)</span></label>
+                                <span id="val-trans-easein" class="font-mono text-orange-300 font-bold">0.50</span>
+                            </div>
+                            <input type="range" id="in-trans-easein" min="0" max="1" step="0.05" value="0.5"
+                                class="w-full accent-orange-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1 text-gray-300">
+                                <label>Desacceleració sortida <span class="text-gray-500">(0=linear)</span></label>
+                                <span id="val-trans-easeout" class="font-mono text-orange-300 font-bold">0.50</span>
+                            </div>
+                            <input type="range" id="in-trans-easeout" min="0" max="1" step="0.05" value="0.5"
+                                class="w-full accent-orange-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+
+                    <!-- Gràfica de previsualització de la corba -->
+                    <div class="mt-3">
+                        <div class="flex gap-4 text-xs text-gray-400 mb-1 items-center">
+                            <span class="font-semibold text-gray-300">Corba de transició:</span>
+                            <span><span class="curve-legend-dot" style="background:#3B82F6"></span>V (vertical)</span>
+                            <span><span class="curve-legend-dot" style="background:#F97316"></span>H (horitzontal)</span>
+                            <span><span class="curve-legend-dot" style="background:#10B981"></span>Mostres exportades</span>
+                        </div>
+                        <!-- Canvas: el buffer intern és 600x150, CSS el fa ample complet -->
+                        <canvas id="curve-canvas" width="600" height="150"
+                            class="w-full rounded border border-gray-700" style="background:#030712; display:block;">
+                        </canvas>
+                        <div class="text-xs text-gray-500 mt-1 text-right">Eix X: temps → | Eix Y: valor BYTE (0-255)</div>
+                    </div>
+                </div>
+                <!-- FI panell de transició V2.0 -->
+
+            </div><!-- fi programador escenes -->
+
+        </div><!-- fi panell central -->
+    </div><!-- fi grid -->
+</div><!-- fi max-w -->
+
+<!-- ============================================================== -->
+<!-- Modal d'Exportació V2.0 - Format CoDeSys Llistes               -->
+<!-- ============================================================== -->
+<div id="export-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 items-center justify-center">
+    <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-gray-600 w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-xl font-bold text-white">Exportar a CoDeSys — Format Llistes V2.0</h2>
+                <p class="text-xs text-orange-400 mt-1">Seqüència interpolada amb transicions suaus</p>
+            </div>
+            <button id="btn-close-modal" class="text-gray-400 hover:text-white transition">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pr-2 space-y-4 text-sm text-gray-300">
+
+            <!-- Selector de Focus + info -->
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-4 flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-3">
+                    <label class="text-sm text-gray-300 font-semibold whitespace-nowrap">Focus a exportar:</label>
+                    <select id="export-light-select"
+                        class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-orange-500">
+                    </select>
+                </div>
+                <div id="export-info" class="text-xs text-gray-400 font-mono"></div>
+            </div>
+
+            <!-- Bloc de codi CoDeSys -->
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-5">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-base font-bold text-orange-400">Codi CoDeSys ST (Llistes d'arrays)</h3>
+                    <div class="flex gap-2">
+                        <button id="btn-copy-st" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md text-white font-bold transition shadow-lg text-sm">
+                            Copiar Focus
+                        </button>
+                        <button id="btn-copy-st-all" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-md text-white font-bold transition shadow-lg text-sm">
+                            Copiar Tots els Focus
+                        </button>
+                    </div>
+                </div>
+                <pre id="st-code-block"
+                    class="bg-black p-4 rounded-md text-xs font-mono text-green-400 overflow-x-auto border border-gray-800 h-80 selection:bg-blue-900 whitespace-pre">
+                </pre>
+            </div>
+
+            <!-- Descarregar CSV (mantingut de V1) -->
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-base font-bold text-yellow-400">Format CSV (diagnòstic)</h3>
+                        <p class="text-xs text-gray-500 mt-0.5">Totes les mostres interpolades en format taula</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-download-csv" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-md text-white font-bold transition shadow-lg text-sm">
+                            CSV Focus
+                        </button>
+                        <button id="btn-copy-csv-all" class="bg-teal-600 hover:bg-teal-500 px-4 py-2 rounded-md text-white font-bold transition shadow-lg text-sm">
+                            Copiar CSV Tots
+                        </button>
+                        <button id="btn-download-csv-all" class="bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-md text-white font-bold transition shadow-lg text-sm">
+                            CSV Tots
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="./app-config.js"></script>
+<script>
+    // =======================================================================
+    // ESTAT GLOBAL (idèntic a V1, sense canvis)
+    // =======================================================================
+    let lights = [];
+    let selectedLightId = null;
+    let scenes = [];
+
+    let targetingLightId = null;
+    const maxStageRadius = 350;
+
+    let calibratingScale = false;
+    let calibrationPoints = [];
+    let pxPerMeter = null;
+
+    let isPlaying = false;
+    let playTimeoutId = null;
+    let animationFrameId = null;
+    let currentSceneIndex = 0;
+    let codesysSocket = null;
+    let codesysPollTimer = null;
+    let codesysLastRxMs = 0;
+    let codesysPendingTx = false;
+
+    const CODESYSCONFIG = {
+      wsUrl:
+        (window.APP_CONFIG && window.APP_CONFIG.wsUrl) ||
+        `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8081`,
+      pollMs:
+        (window.APP_CONFIG && window.APP_CONFIG.pollMs) ?? 50,
+      baseQbOffset:
+        (window.APP_CONFIG && window.APP_CONFIG.baseQbOffset) ?? 0,
+      bytesPerFocus: 6,
+      maxFrameBytes: 20,
+      maxFocusCount: Math.floor(20 / 6)
+    };
+
+    // --- DOM ---
+    const stage = document.getElementById('stage');
+    const controlsPanel = document.getElementById('controls-panel');
+    const selectedLabel = document.getElementById('selected-label');
+    const targetBanner = document.getElementById('targeting-banner');
+    const targetLine = document.getElementById('target-line');
+    const laser = document.getElementById('laser');
+    const btnCodesysConnect = document.getElementById('btn-codesys-connect');
+    const codesysStatus = document.getElementById('codesys-status');
+    const codesysModeBadge = document.getElementById('codesys-mode-badge');
+    const inCodesysLatency = document.getElementById('in-codesys-latency');
+    const inCodesysBaseQb = document.getElementById('in-codesys-base-qb');
+
+    const inColorPicker = document.getElementById('in-color-picker');
+    const valHex = document.getElementById('val-hex');
+    const updateSceneContainer = document.getElementById('update-scene-container');
+    const editSceneName = document.getElementById('edit-scene-name');
+
+    const scaleTools = document.getElementById('scaleTools');
+    const btnCalibrateScale = document.getElementById('btnCalibrateScale');
+    const inScaleMeters = document.getElementById('in-scale-meters');
+    const inFocusHeight = document.getElementById('in-focus-height');
+    const inMaxHorizontal = document.getElementById('in-max-horizontal');
+    const valScale = document.getElementById('val-scale');
+    const valFocusHeight = document.getElementById('val-focus-height');
+    const valMaxHorizontal = document.getElementById('val-max-horizontal');
+    const valPxPerMeter = document.getElementById('val-px-per-meter');
+    const valHorizontalPx = document.getElementById('val-horizontal-px');
+    const valSlant = document.getElementById('val-slant');
+    const valBeamAngle = document.getElementById('val-beam-angle');
+
+    const inputs = {
+        pan: document.getElementById('in-pan'), tilt: document.getElementById('in-tilt'),
+        r: document.getElementById('in-r'), g: document.getElementById('in-g'), b: document.getElementById('in-b'),
+        zoom: document.getElementById('in-zoom')
+    };
+    const displays = {
+        pan: document.getElementById('val-pan'), tilt: document.getElementById('val-tilt'),
+        r: document.getElementById('val-r'), g: document.getElementById('val-g'), b: document.getElementById('val-b'),
+        zoom: document.getElementById('val-zoom')
+    };
+
+    // =======================================================================
+    // CONVERSORS DE COLOR (idèntics a V1)
+    // =======================================================================
+    function rgbToHex(r, g, b) {
+        return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase();
+    }
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+    }
+    function syncColorPickerUI(light) {
+        const hex = rgbToHex(Math.round(light.r), Math.round(light.g), Math.round(light.b));
+        inColorPicker.value = hex;
+        valHex.innerText = hex;
+    }
+
+    // =======================================================================
+    // CALIBRACIÓ D'ESCALA (idèntic a V1 + CSS fixes per calibration-mark)
+    // =======================================================================
+    function clearCalibrationMarks() {
+        stage.querySelectorAll('.calibration-mark, .calibration-line').forEach(el => el.remove());
+    }
+    function drawCalibrationMarks() {
+        clearCalibrationMarks();
+        if (calibrationPoints.length === 0) return;
+        calibrationPoints.forEach((pt, idx) => {
+            const mark = document.createElement('div');
+            mark.className = 'calibration-mark';
+            mark.style.left = `${pt.x}px`;
+            mark.style.top = `${pt.y}px`;
+            stage.appendChild(mark);
+        });
+        if (calibrationPoints.length === 2) {
+            const [p1, p2] = calibrationPoints;
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const len = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            const line = document.createElement('div');
+            line.className = 'calibration-line';
+            line.style.left = `${p1.x}px`;
+            line.style.top = `${p1.y}px`;
+            line.style.width = `${len}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            stage.appendChild(line);
+        }
+    }
+    function updateScaleUI() {
+        const meters = parseFloat(inScaleMeters.value);
+        const height = parseFloat(inFocusHeight.value);
+        const horizontal = parseFloat(inMaxHorizontal.value);
+        if (calibrationPoints.length === 2 && Number.isFinite(meters) && meters > 0) {
+            const [p1, p2] = calibrationPoints;
+            const distPx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            pxPerMeter = distPx / meters;
+            valScale.textContent = `${meters.toFixed(2)} m`;
+            valPxPerMeter.textContent = `${pxPerMeter.toFixed(1)} px/m`;
+        } else {
+            valPxPerMeter.textContent = '-';
+        }
+        if (Number.isFinite(height) && height > 0) valFocusHeight.textContent = `${height.toFixed(2)} m`;
+        else valFocusHeight.textContent = '-';
+        if (Number.isFinite(horizontal) && horizontal > 0 && pxPerMeter) {
+            const hPx = horizontal * pxPerMeter;
+            valMaxHorizontal.textContent = `${horizontal.toFixed(2)} m`;
+            valHorizontalPx.textContent = `${Math.round(hPx)} px`;
+        } else {
+            valMaxHorizontal.textContent = '-';
+            valHorizontalPx.textContent = '-';
+        }
+        if (Number.isFinite(height) && Number.isFinite(horizontal) && height > 0 && horizontal > 0) {
+            const slant = Math.hypot(height, horizontal);
+            const angle = Math.atan2(horizontal, height) * 180 / Math.PI;
+            valSlant.textContent = `${slant.toFixed(2)} m`;
+            valBeamAngle.textContent = `${angle.toFixed(1)}°`;
+        } else {
+            valSlant.textContent = '-';
+            valBeamAngle.textContent = '-';
+        }
+    }
+    function getMaxGroundRadiusPx() {
+        const horizontal = parseFloat(inMaxHorizontal.value);
+        if (Number.isFinite(horizontal) && horizontal > 0 && pxPerMeter) return horizontal * pxPerMeter;
+        return maxStageRadius;
+    }
+    function startScaleCalibration() {
+        calibratingScale = true;
+        calibrationPoints = [];
+        clearCalibrationMarks();
+        btnCalibrateScale.textContent = 'Marca 2 punts sobre la imatge';
+        stage.style.cursor = 'crosshair';
+        updateScaleUI();
+    }
+    function finishScaleCalibration() {
+        calibratingScale = false;
+        btnCalibrateScale.textContent = 'Calibrar escala';
+        stage.style.cursor = '';
+        updateScaleUI();
+    }
+
+    document.getElementById('bg-upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            stage.style.backgroundImage = `url(${URL.createObjectURL(file)})`;
+            stage.style.backgroundSize = 'contain';
+            scaleTools.classList.remove('hidden');
+        }
+    });
+    btnCalibrateScale.addEventListener('click', startScaleCalibration);
+    inScaleMeters.addEventListener('input', updateScaleUI);
+    inFocusHeight.addEventListener('input', updateScaleUI);
+    inMaxHorizontal.addEventListener('input', updateScaleUI);
+
+    // =======================================================================
+    // GESTIÓ DE FOCUS (idèntic a V1)
+    // =======================================================================
+    function getNextAvailableLightId() {
+        const usedIds = new Set(lights.map(l => l.id));
+        let candidate = 1;
+        while (usedIds.has(candidate)) candidate++;
+        return candidate;
+    }
+    function addLight(x = stage.offsetWidth / 2, y = stage.offsetHeight / 2) {
+        if (lights.length >= CODESYSCONFIG.maxFocusCount) {
+          alert(`Mode live limitat a ${CODESYSCONFIG.maxFocusCount} focus per compatibilitat amb CODESYS (20 bytes).`);
+          return;
+        }
+        const newLight = { id: getNextAvailableLightId(), x, y, pan: 180, tilt: 0, r: 255, g: 255, b: 255, zoom: 128 };
+        lights.push(newLight);
+        createLightElements(newLight);
+        selectLight(newLight.id);
+        renderAllBeams();
+        requestCodesysSync();
+        // V2.0: actualitzar selector del modal si estava obert
+        populateExportLightSelector();
+        refreshLiveCapacityUI();
+    }
+    function createLightElements(light) {
+        const rig = document.createElement('div');
+        rig.className = 'rigging';
+        rig.id = `rig-${light.id}`;
+        rig.innerText = `F${light.id}`;
+        rig.style.left = `${light.x}px`;
+        rig.style.top = `${light.y}px`;
+        rig.addEventListener('mousedown', (e) => startDrag(e, light.id));
+        rig.addEventListener('dblclick', (e) => { e.stopPropagation(); startTargeting(light.id); });
+
+        const coverage = document.createElement('div');
+        coverage.className = 'coverage-ring';
+        coverage.id = `coverage-${light.id}`;
+
+        const beam = document.createElement('div');
+        beam.className = 'light-beam';
+        beam.id = `beam-${light.id}`;
+
+        stage.appendChild(coverage);
+        stage.appendChild(beam);
+        stage.appendChild(rig);
+    }
+    function clearSelectionUI() {
+        selectedLightId = null;
+        document.querySelectorAll('.rigging').forEach(el => el.classList.remove('selected'));
+        selectedLabel.innerText = 'Cap seleccionat';
+        controlsPanel.style.opacity = '0.3';
+        controlsPanel.style.pointerEvents = 'none';
+    }
+    function deleteLight(id) {
+        const idx = lights.findIndex(l => l.id === id);
+        if (idx === -1) return false;
+
+        if (targetingLightId === id) stopTargeting();
+        if (draggingLightId === id) stopDrag();
+        if (isPlaying) stopPlayback();
+
+        lights.splice(idx, 1);
+        scenes.forEach(scene => {
+            scene.lightsState = scene.lightsState.filter(l => l.id !== id);
+        });
+
+        ['rig', 'beam', 'coverage'].forEach(prefix => {
+            const el = document.getElementById(`${prefix}-${id}`);
+            if (el) el.remove();
+        });
+
+        if (selectedLightId === id) {
+            if (lights.length > 0) selectLight(lights[0].id);
+            else clearSelectionUI();
+        } else {
+            renderAllBeams();
+        }
+        requestCodesysSync();
+
+        populateExportLightSelector();
+        if (modal.classList.contains('flex')) {
+            if (lights.length > 0) generateExportCode();
+            else {
+                document.getElementById('export-info').textContent = 'Cap focus disponible';
+                document.getElementById('st-code-block').innerText = '';
+            }
+        }
+        if (!document.getElementById('transition-config-panel').classList.contains('hidden')) {
+            drawCurvePreview(currentSceneIndex);
+        }
+        return true;
+        refreshLiveCapacityUI();
+    }
+
+    let draggingLightId = null;
+    function startDrag(e, id) {
+        if (e.button !== 0) return;
+        if (targetingLightId) stopTargeting();
+        if (isPlaying) stopPlayback();
+        selectLight(id);
+        draggingLightId = id;
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
+    }
+    function onDrag(e) {
+        if (!draggingLightId) return;
+        const rig = document.getElementById(`rig-${draggingLightId}`);
+        const rect = stage.getBoundingClientRect();
+        const newX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+        const newY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+        const light = lights.find(l => l.id === draggingLightId);
+        light.x = newX; light.y = newY;
+        rig.style.left = `${newX}px`; rig.style.top = `${newY}px`;
+        renderAllBeams();
+        requestCodesysSync();
+    }
+    function stopDrag() {
+        draggingLightId = null;
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+    }
+
+    document.getElementById('btn-add-light').addEventListener('click', () => {
+        addLight(Math.random() * (stage.offsetWidth - 100) + 50, Math.random() * (stage.offsetHeight - 100) + 50);
+    });
+    document.getElementById('btn-delete-light').addEventListener('click', () => {
+        if (!selectedLightId) return alert('Selecciona un focus per eliminar-lo.');
+        const ok = confirm(`Vols eliminar el focus F${selectedLightId}?`);
+        if (!ok) return;
+        deleteLight(selectedLightId);
+    });
+    
+    function refreshLiveCapacityUI() {
+      const btnAdd = document.getElementById('btn-add-light');
+      if (!btnAdd) return;
+
+      const full = lights.length >= CODESYSCONFIG.maxFocusCount;
+      btnAdd.disabled = full;
+      btnAdd.classList.toggle('opacity-50', full);
+      btnAdd.classList.toggle('cursor-not-allowed', full);
+    }
+    function selectLight(id) {
+        const rigEl = document.getElementById(`rig-${id}`);
+        if (!rigEl) return;
+        selectedLightId = id;
+        document.querySelectorAll('.rigging').forEach(el => el.classList.remove('selected'));
+        rigEl.classList.add('selected');
+        selectedLabel.innerText = `F${id} Seleccionat`;
+        controlsPanel.style.opacity = '1';
+        controlsPanel.style.pointerEvents = 'auto';
+        const light = lights.find(l => l.id === id);
+        Object.keys(inputs).forEach(key => inputs[key].value = Math.round(light[key]));
+        updateSlidersUI(light);
+        syncColorPickerUI(light);
+        // V2.0: refresca corba si el panell de transició és visible
+        if (!document.getElementById('transition-config-panel').classList.contains('hidden')) {
+            drawCurvePreview(currentSceneIndex);
+        }
+    }
+    function updateSlidersUI(light) {
+        Object.keys(displays).forEach(key => displays[key].innerText = Math.round(light[key]));
+    }
+
+    Object.keys(inputs).forEach(key => {
+        inputs[key].addEventListener('input', (e) => {
+            if (!selectedLightId) return;
+            if (isPlaying) stopPlayback();
+            const light = lights.find(l => l.id === selectedLightId);
+            light[key] = parseInt(e.target.value);
+            updateSlidersUI(light);
+            if (['r', 'g', 'b'].includes(key)) syncColorPickerUI(light);
+            renderAllBeams();
+            requestCodesysSync();
+        });
+    });
+
+    inColorPicker.addEventListener('input', (e) => {
+        if (!selectedLightId) return;
+        if (isPlaying) stopPlayback();
+        const rgb = hexToRgb(e.target.value);
+        if (rgb) {
+            const light = lights.find(l => l.id === selectedLightId);
+            light.r = rgb.r; light.g = rgb.g; light.b = rgb.b;
+            inputs.r.value = rgb.r; inputs.g.value = rgb.g; inputs.b.value = rgb.b;
+            updateSlidersUI(light);
+            valHex.innerText = e.target.value.toUpperCase();
+            renderAllBeams();
+            requestCodesysSync();
+        }
+    });
+
+    // =======================================================================
+    // MODE APUNTAR (idèntic a V1)
+    // =======================================================================
+    function startTargeting(id) {
+        if (isPlaying) stopPlayback();
+        targetingLightId = id; selectLight(id);
+        stage.style.cursor = 'crosshair';
+        targetBanner.style.display = 'block'; targetLine.classList.remove('hidden');
+        const light = lights.find(l => l.id === id);
+        laser.setAttribute('x1', light.x); laser.setAttribute('y1', light.y);
+        laser.setAttribute('x2', light.x); laser.setAttribute('y2', light.y);
+    }
+    function stopTargeting() {
+        targetingLightId = null; stage.style.cursor = 'crosshair';
+        targetBanner.style.display = 'none'; targetLine.classList.add('hidden');
+    }
+
+    stage.addEventListener('mousemove', (e) => {
+        if (!targetingLightId) return;
+        const rect = stage.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
+        const light = lights.find(l => l.id === targetingLightId);
+        laser.setAttribute('x1', light.x); laser.setAttribute('y1', light.y);
+        laser.setAttribute('x2', mouseX); laser.setAttribute('y2', mouseY);
+        const dx = mouseX - light.x; const dy = mouseY - light.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        let angleDeg = Math.atan2(dy, dx) * (180 / Math.PI);
+        let pan = ((-angleDeg) + 90 + 360) % 360;
+        const stageRadius = getMaxGroundRadiusPx();
+        let distPct = Math.min(distance / stageRadius, 1);
+        let tilt = Math.round(distPct * 90);
+        light.pan = Math.round(pan); light.tilt = tilt;
+        inputs.pan.value = light.pan; inputs.tilt.value = light.tilt;
+        updateSlidersUI(light); renderAllBeams();
+        requestCodesysSync();
+    });
+
+    stage.addEventListener('click', (e) => {
+        if (calibratingScale) {
+            const rect = stage.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            calibrationPoints.push({ x, y });
+            if (calibrationPoints.length > 2) calibrationPoints = calibrationPoints.slice(-2);
+            drawCalibrationMarks();
+            if (calibrationPoints.length === 2) {
+                updateScaleUI();
+                finishScaleCalibration();
+            }
+            return;
+        }
+        if (targetingLightId) stopTargeting();
+    });
+
+    // =======================================================================
+    // RENDERITZACIÓ (idèntic a V1)
+    // =======================================================================
+    function renderAllBeams() {
+        lights.forEach(light => {
+            const beam = document.getElementById(`beam-${light.id}`);
+            const coverage = document.getElementById(`coverage-${light.id}`);
+            if (!beam || !coverage) return;
+            const maxRadius = getMaxGroundRadiusPx();
+            const angleRad = (light.pan - 90) * (Math.PI / 180);
+            const distancePercent = light.tilt / 90;
+            const distance = Math.min(distancePercent * maxRadius, maxRadius);
+            const beamX = light.x + (distance * Math.cos(angleRad));
+            const beamY = light.y - (distance * Math.sin(angleRad));
+            const rawSize = (30 + (light.zoom / 255) * 270) * (1 + (distancePercent * 0.5));
+            const maxVisibleSize = Math.max(16, (maxRadius - distance) * 2);
+            const size = Math.min(rawSize, maxVisibleSize);
+            coverage.style.left = `${light.x}px`; coverage.style.top = `${light.y}px`;
+            coverage.style.width = `${maxRadius * 2}px`; coverage.style.height = `${maxRadius * 2}px`;
+            beam.style.left = `${beamX}px`; beam.style.top = `${beamY}px`;
+            beam.style.width = `${size}px`; beam.style.height = `${size}px`;
+            beam.style.background = `radial-gradient(circle,
+                rgba(${light.r},${light.g},${light.b}, 1) 0%,
+                rgba(${light.r},${light.g},${light.b}, 0.8) 40%,
+                rgba(${light.r},${light.g},${light.b}, 0) 75%)`;
+        });
+    }
+
+    // =======================================================================
+    // TIMELINE I ANIMACIÓ
+    // =======================================================================
+    const btnAddScene = document.getElementById('btn-add-scene');
+    const btnPlay = document.getElementById('btn-play');
+    const btnStop = document.getElementById('btn-stop');
+    const sceneList = document.getElementById('scene-list');
+    const emptyText = document.getElementById('empty-scenes');
+
+    // V2.0: Transició per defecte
+    function defaultTransition() {
+        return { durationMs: 1000, easeIn: 0.5, easeOut: 0.5, minSampleMs: 50 };
+    }
+
+    // V2.0: Afegir escena amb transició
+    btnAddScene.addEventListener('click', () => {
+        if (lights.length === 0) return alert("Afegeix almenys un focus primer.");
+        const stateCopy = JSON.parse(JSON.stringify(lights));
+        scenes.push({
+            sceneName: `Pas ${scenes.length + 1}`,
+            lightsState: stateCopy,
+            transition: defaultTransition()   // V2.0: transició configurable per pas
+        });
+        currentSceneIndex = scenes.length - 1;
+        renderScenesUI();
+    });
+
+    // Sobreescriure pas (idèntic a V1)
+    document.getElementById('btn-update-scene').addEventListener('click', () => {
+        if (currentSceneIndex >= 0 && currentSceneIndex < scenes.length) {
+            scenes[currentSceneIndex].lightsState = JSON.parse(JSON.stringify(lights));
+            const btn = document.getElementById('btn-update-scene');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '✅ Pas Actualitzat!';
+            btn.classList.replace('bg-purple-600', 'bg-green-600');
+            btn.classList.replace('hover:bg-purple-500', 'hover:bg-green-500');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.replace('bg-green-600', 'bg-purple-600');
+                btn.classList.replace('hover:bg-green-500', 'hover:bg-purple-500');
+            }, 1500);
+        }
+    });
+
+    function renderScenesUI() {
+        if (scenes.length === 0) {
+            emptyText.style.display = 'block';
+            sceneList.innerHTML = '';
+            sceneList.appendChild(emptyText);
+            updateSceneContainer.classList.add('hidden');
+            document.getElementById('transition-config-panel').classList.add('hidden'); // V2.0
+            return;
+        }
+        emptyText.style.display = 'none';
+        sceneList.innerHTML = '';
+        updateSceneContainer.classList.remove('hidden');
+        editSceneName.innerText = `Pas ${currentSceneIndex + 1}`;
+
+        scenes.forEach((scene, index) => {
+            const el = document.createElement('div');
+            el.className = `min-w-[120px] p-3 rounded-lg border cursor-pointer transition flex-shrink-0 text-center shadow-md
+                            ${currentSceneIndex === index ? 'bg-blue-900 border-blue-400 scale-105' : 'bg-gray-700 border-gray-600 hover:bg-gray-500'}`;
+
+            // V2.0: Mostrem el nombre de mostres si té transició
+            const hasNext = index < scenes.length - 1;
+            const trans = scene.transition || defaultTransition();
+            const nSamples = hasNext ? Math.max(2, Math.floor(trans.durationMs / trans.minSampleMs)) : 0;
+            const samplesLabel = hasNext ? `<div class="text-[10px] text-orange-300 mt-1 font-mono">${trans.durationMs}ms · ${nSamples}m</div>` : '';
+
+            el.innerHTML = `<div class="text-sm font-bold text-white">Pas ${index + 1}</div>${samplesLabel}`;
+            el.onclick = () => {
+                if (!isPlaying) transitionToScene(index, 400);
+            };
+            sceneList.appendChild(el);
+        });
+
+        // V2.0: Mostra panell de transició si el pas actual NO és l'últim
+        if (currentSceneIndex < scenes.length - 1) {
+            loadTransitionUI(currentSceneIndex);
+        } else {
+            // Últim pas: amaguem el panell de transició
+            document.getElementById('transition-config-panel').classList.add('hidden');
+        }
+    }
+
+    // Motor d'interpolació de l'animació en directe (idèntic a V1)
+    function transitionToScene(targetIndex, durationMs, callback = null) {
+        cancelAnimationFrame(animationFrameId);
+        currentSceneIndex = targetIndex;
+        renderScenesUI();
+        const targetScene = scenes[targetIndex];
+        const startStates = lights.map(l => ({ ...l }));
+        const startTime = performance.now();
+
+        function animate(time) {
+            let progress = (time - startTime) / durationMs;
+            if (progress > 1) progress = 1;
+            const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+            lights.forEach((light, i) => {
+                const start = startStates[i];
+                const end = targetScene.lightsState.find(l => l.id === light.id) || start;
+                light.pan = start.pan + (end.pan - start.pan) * ease;
+                light.tilt = start.tilt + (end.tilt - start.tilt) * ease;
+                light.r = start.r + (end.r - start.r) * ease;
+                light.g = start.g + (end.g - start.g) * ease;
+                light.b = start.b + (end.b - start.b) * ease;
+                light.zoom = start.zoom + (end.zoom - start.zoom) * ease;
+            });
+            if (selectedLightId) {
+                const sl = lights.find(l => l.id === selectedLightId);
+                Object.keys(inputs).forEach(key => inputs[key].value = Math.round(sl[key]));
+                updateSlidersUI(sl);
+                syncColorPickerUI(sl);
+            }
+            renderAllBeams();
+            requestCodesysSync();
+            if (progress < 1) {
+                animationFrameId = requestAnimationFrame(animate);
+            } else {
+                lights.forEach(light => { Object.keys(light).forEach(k => { if (k !== 'id') light[k] = Math.round(light[k]); }); });
+                if (callback) callback();
+            }
+        }
+        if (durationMs <= 0) {
+            targetScene.lightsState.forEach(end => {
+                const light = lights.find(l => l.id === end.id);
+                if (light) Object.assign(light, end);
+            });
+            renderAllBeams();
+            requestCodesysSync();
+            if (callback) callback();
+        } else {
+            animationFrameId = requestAnimationFrame(animate);
+        }
+    }
+
+    btnPlay.addEventListener('click', () => {
+        if (scenes.length === 0) return alert("Guarda almenys 1 pas primer.");
+        isPlaying = true;
+        btnPlay.classList.add('hidden');
+        btnStop.classList.remove('hidden'); btnStop.classList.add('flex');
+        transitionToScene(0, 0, () => playNextSequence());
+    });
+    function playNextSequence() {
+        if (!isPlaying) return;
+        const nextIndex = (currentSceneIndex + 1) % scenes.length;
+        transitionToScene(nextIndex, 1200, () => {
+            if (isPlaying) playTimeoutId = setTimeout(playNextSequence, 500);
+        });
+    }
+    function stopPlayback() {
+        isPlaying = false;
+        cancelAnimationFrame(animationFrameId);
+        clearTimeout(playTimeoutId);
+        btnPlay.classList.remove('hidden');
+        btnStop.classList.add('hidden'); btnStop.classList.remove('flex');
+        renderScenesUI();
+    }
+    btnStop.addEventListener('click', stopPlayback);
+
+    // =======================================================================
+    // V2.0: PANELL DE CONFIGURACIÓ DE TRANSICIONS
+    // =======================================================================
+
+    // Elements DOM del panell de transició
+    const transitionPanel = document.getElementById('transition-config-panel');
+    const transFromLabel = document.getElementById('trans-from-label');
+    const transToLabel = document.getElementById('trans-to-label');
+    const transSamplesBadge = document.getElementById('trans-samples-badge');
+    const inTransDuration = document.getElementById('in-trans-duration');
+    const inTransEaseIn = document.getElementById('in-trans-easein');
+    const inTransEaseOut = document.getElementById('in-trans-easeout');
+    const inTransMinSample = document.getElementById('in-trans-minsample');
+    const valTransDuration = document.getElementById('val-trans-duration');
+    const valTransEaseIn = document.getElementById('val-trans-easein');
+    const valTransEaseOut = document.getElementById('val-trans-easeout');
+    const valTransMinSample = document.getElementById('val-trans-minsample');
+    const curveCanvas = document.getElementById('curve-canvas');
+    const curveCtx = curveCanvas.getContext('2d');
+
+    // Carrega la config de transició del pas indicat als sliders
+    function loadTransitionUI(sceneIndex) {
+        if (sceneIndex < 0 || sceneIndex >= scenes.length - 1) return;
+        const trans = scenes[sceneIndex].transition || defaultTransition();
+
+        inTransDuration.value = trans.durationMs;
+        inTransEaseIn.value = trans.easeIn;
+        inTransEaseOut.value = trans.easeOut;
+        inTransMinSample.value = trans.minSampleMs;
+
+        updateTransitionDisplays(trans);
+        transFromLabel.innerText = sceneIndex + 1;
+        transToLabel.innerText = sceneIndex + 2;
+        transitionPanel.classList.remove('hidden');
+        drawCurvePreview(sceneIndex);
+    }
+
+    // Actualitza els textos dels valors dels sliders
+    function updateTransitionDisplays(trans) {
+        const n = Math.max(2, Math.floor(trans.durationMs / trans.minSampleMs));
+        const realSampleMs = Math.max(50, Math.round(trans.durationMs / n));
+        valTransDuration.innerText = trans.durationMs + ' ms';
+        valTransEaseIn.innerText = trans.easeIn.toFixed(2);
+        valTransEaseOut.innerText = trans.easeOut.toFixed(2);
+        valTransMinSample.innerText = trans.minSampleMs + ' ms';
+        transSamplesBadge.innerText = `${n} mostres · ${realSampleMs}ms/m`;
+    }
+
+    // Desa la config des dels sliders a l'escena actual
+    function saveTransitionFromUI() {
+        if (currentSceneIndex < 0 || currentSceneIndex >= scenes.length - 1) return;
+        if (!scenes[currentSceneIndex].transition) scenes[currentSceneIndex].transition = defaultTransition();
+        const trans = scenes[currentSceneIndex].transition;
+        trans.durationMs = parseInt(inTransDuration.value);
+        trans.easeIn = parseFloat(inTransEaseIn.value);
+        trans.easeOut = parseFloat(inTransEaseOut.value);
+        trans.minSampleMs = parseInt(inTransMinSample.value);
+        updateTransitionDisplays(trans);
+        renderScenesUI(); // Refresca els badges als passos
+        drawCurvePreview(currentSceneIndex);
+    }
+
+    // Escolta canvis als sliders de transició
+    [inTransDuration, inTransEaseIn, inTransEaseOut, inTransMinSample].forEach(el => {
+        el.addEventListener('input', saveTransitionFromUI);
+    });
+
+    // =======================================================================
+    // V2.0: FUNCIÓ D'EASING PERSONALITZAT
+    // Interpola entre inici i final aplicant acceleració/desacceleració
+    // t ∈ [0,1], easeIn ∈ [0,1], easeOut ∈ [0,1]
+    // easeIn=0, easeOut=0 → lineal pur
+    // easeIn=1, easeOut=1 → suavitzat total (smoothstep)
+    // =======================================================================
+    function customEase(t, easeIn, easeOut) {
+        // Primera meitat: zona d'acceleració (ease-in)
+        // Segona meitat: zona de desacceleració (ease-out)
+        let result;
+        if (t <= 0.5) {
+            const t2 = t * 2;                          // 0..1 dins la primera meitat
+            const linear = t2;
+            const quad = t2 * t2;                      // quadràtica: inici lent
+            result = (linear * (1 - easeIn) + quad * easeIn) * 0.5;
+        } else {
+            const t2 = (t - 0.5) * 2;                 // 0..1 dins la segona meitat
+            const linear = t2;
+            const quad = 1 - (1 - t2) * (1 - t2);    // quadràtica: final lent
+            result = 0.5 + (linear * (1 - easeOut) + quad * easeOut) * 0.5;
+        }
+        return Math.max(0, Math.min(1, result));
+    }
+
+    // =======================================================================
+    // V2.0: DIBUIX DE LA GRÀFICA DE CORBA
+    // Eix X: temps → | Eix Y: valor BYTE (0-255)
+    // Blau = canal V (tilt → byte), Taronja = canal H (pan → byte)
+    // Punts verds = mostres reals que s'exportaran
+    // =======================================================================
+    function drawCurvePreview(fromIndex) {
+        const W = curveCanvas.width;
+        const H = curveCanvas.height;
+        const PAD_L = 32, PAD_R = 8, PAD_T = 12, PAD_B = 24;
+        const CW = W - PAD_L - PAD_R;
+        const CH = H - PAD_T - PAD_B;
+
+        curveCtx.clearRect(0, 0, W, H);
+        curveCtx.fillStyle = '#030712';
+        curveCtx.fillRect(0, 0, W, H);
+
+        const toIndex = fromIndex + 1;
+        if (toIndex >= scenes.length) {
+            curveCtx.fillStyle = '#4B5563';
+            curveCtx.font = '13px monospace';
+            curveCtx.fillText('Últim pas — no hi ha transició posterior', PAD_L + 10, H / 2);
+            return;
+        }
+
+        const trans = scenes[fromIndex].transition || defaultTransition();
+        const lightId = selectedLightId || lights[0]?.id;
+        if (!lightId) return;
+
+        const fromState = scenes[fromIndex].lightsState.find(l => l.id === lightId) || lights.find(l => l.id === lightId);
+        const toState   = scenes[toIndex].lightsState.find(l => l.id === lightId)   || lights.find(l => l.id === lightId);
+        if (!fromState || !toState) return;
+
+        // Conversió als valors BYTE exportats
+        const fromV = tiltToByte(fromState.tilt);
+        const toV   = tiltToByte(toState.tilt);
+        const fromH = panToByte(fromState.pan);
+        const toH   = panToByte(toState.pan);
+
+        // --- Grid horitzontal (escala BYTE 0..255) ---
+        curveCtx.strokeStyle = '#1F2937';
+        curveCtx.lineWidth = 1;
+        curveCtx.fillStyle = '#6B7280';
+        curveCtx.font = '9px monospace';
+        for (let i = 0; i <= 4; i++) {
+            const byteVal = i * 64 > 255 ? 255 : i * 64;
+            const y = PAD_T + CH - (byteVal / 255) * CH;
+            curveCtx.beginPath();
+            curveCtx.moveTo(PAD_L, y); curveCtx.lineTo(W - PAD_R, y);
+            curveCtx.stroke();
+            curveCtx.fillText(byteVal, 0, y + 3);
+        }
+
+        // --- Línies de la corba (suavitzada, N=200 punts) ---
+        const DRAW_N = 200;
+        function drawCurveLine(fromVal, toVal, color) {
+            curveCtx.beginPath();
+            curveCtx.strokeStyle = color;
+            curveCtx.lineWidth = 2.5;
+            for (let i = 0; i <= DRAW_N; i++) {
+                const t = i / DRAW_N;
+                const ease = customEase(t, trans.easeIn, trans.easeOut);
+                const val = fromVal + (toVal - fromVal) * ease;
+                const x = PAD_L + t * CW;
+                const y = PAD_T + CH - (val / 255) * CH;
+                if (i === 0) curveCtx.moveTo(x, y); else curveCtx.lineTo(x, y);
+            }
+            curveCtx.stroke();
+        }
+        drawCurveLine(fromV, toV, '#3B82F6'); // Blau: V
+        drawCurveLine(fromH, toH, '#F97316'); // Taronja: H
+
+        // --- Punts de les mostres reals ---
+        const N = Math.max(2, Math.floor(trans.durationMs / trans.minSampleMs));
+        curveCtx.fillStyle = '#10B981';
+        for (let k = 0; k <= N; k++) {
+            const t = k / N;
+            const ease = customEase(t, trans.easeIn, trans.easeOut);
+            const valV = fromV + (toV - fromV) * ease;
+            const x = PAD_L + t * CW;
+            const y = PAD_T + CH - (valV / 255) * CH;
+            curveCtx.beginPath();
+            curveCtx.arc(x, y, 2.5, 0, Math.PI * 2);
+            curveCtx.fill();
+        }
+
+        // --- Etiquetes eix X (temps) ---
+        curveCtx.fillStyle = '#9CA3AF';
+        curveCtx.font = '9px monospace';
+        curveCtx.fillText('0', PAD_L - 3, H - 6);
+        curveCtx.fillText(trans.durationMs + 'ms', W - PAD_R - 30, H - 6);
+        curveCtx.fillText(`${N} most.`, PAD_L + CW / 2 - 15, H - 6);
+
+        // --- Valors V i H als extrems ---
+        curveCtx.font = '9px monospace';
+        curveCtx.fillStyle = '#93C5FD';
+        curveCtx.fillText(`V: ${fromV}→${toV}`, W - 68, PAD_T + 10);
+        curveCtx.fillStyle = '#FDBA74';
+        curveCtx.fillText(`H: ${fromH}→${toH}`, W - 68, PAD_T + 22);
+    }
+
+    // =======================================================================
+    // V2.0: CONVERSORS tilt/pan → BYTE CoDeSys
+    // pan: graus horitzontals 0-360° → H_byte = round(pan / 360 * 255)
+    // tilt: graus verticals 0-90° (0 = feix horitzontal al pla) → V_byte = round(tilt / 90 * 255)
+    // =======================================================================
+    const DEBUG_QB = true;
+
+    function debugFrameQBs(label, frame) { 
+      if (!DEBUG_QB) return;
+      if (!(frame instanceof Uint8Array)) return;
+
+      const qbList = Array.from(frame).map((value, index) => `QB${index}=${value}`);
+      console.log(`[${label}] ${qbList.join(' | ')}`);
+
+      lights.forEach(light => {
+        const off = focusToFrameOffset(light);
+        if (off < 0 || off + 5 >= frame.length) return;
+
+        console.log(
+          `[${label}] F${light.id} -> ` +
+          `QB${off + 0}(R)=${frame[off + 0]}, ` +
+          `QB${off + 1}(G)=${frame[off + 1]}, ` +
+          `QB${off + 2}(B)=${frame[off + 2]}, ` +
+          `QB${off + 3}(TILT)=${frame[off + 3]}, ` +
+          `QB${off + 4}(PAN)=${frame[off + 4]}, ` +
+          `QB${off + 5}(ZOOM)=${frame[off + 5]}`
+        );
+      });
+    }
+    function tiltToByte(tilt) {
+        return Math.min(255, Math.max(0, Math.round(tilt / 90 * 255)));
+    }
+    function panToByte(pan) {
+        return Math.min(255, Math.max(0, Math.round(pan / 360 * 255)));
+    }
+    function clamp255(v) {
+        return Math.min(255, Math.max(0, Math.round(v)));
+    }
+    function lerpVal(a, b, t) { return a + (b - a) * t; }
+
+    function isCodesysConnected() {
+        return codesysSocket && codesysSocket.readyState === WebSocket.OPEN;
+    }
+    function setCodesysStatus(text, tone = 'neutral') {
+        codesysStatus.innerText = text;
+        codesysStatus.className = 'text-xs font-mono border rounded px-2 py-1';
+        if (tone === 'ok') codesysStatus.classList.add('text-emerald-200', 'bg-emerald-900', 'border-emerald-700');
+        else if (tone === 'warn') codesysStatus.classList.add('text-yellow-200', 'bg-yellow-900', 'border-yellow-700');
+        else if (tone === 'err') codesysStatus.classList.add('text-red-200', 'bg-red-900', 'border-red-700');
+        else codesysStatus.classList.add('text-gray-300', 'bg-gray-900', 'border-gray-600');
+    }
+    function setCodesysModeBadge(isLive) {
+        codesysModeBadge.innerText = isLive ? 'Live CODESYS' : 'Programació';
+        codesysModeBadge.className = 'text-xs font-bold px-2 py-1 rounded';
+        if (isLive) codesysModeBadge.classList.add('bg-emerald-900', 'text-emerald-200');
+        else codesysModeBadge.classList.add('bg-gray-700', 'text-gray-200');
+    }
+    function focusToFrameOffset(light) {
+      return CODESYSCONFIG.baseQbOffset + ((light.id - 1) * CODESYSCONFIG.bytesPerFocus);
+    }
+    function writeFocusToFrame(frame, light) {
+      const off = focusToFrameOffset(light);
+      if (off < 0 || off + 5 >= frame.length) return;
+
+      frame[off + 0] = clamp255(light.r);
+      frame[off + 1] = clamp255(light.g);
+      frame[off + 2] = clamp255(light.b);
+      frame[off + 3] = tiltToByte(light.tilt);
+      frame[off + 4] = panToByte(light.pan);
+      frame[off + 5] = clamp255(light.zoom);
+    }
+    function readFocusFromFrame(frame, light) {
+      const off = focusToFrameOffset(light);
+      if (off < 0 || off + 5 >= frame.length) return;
+
+      light.r = frame[off + 0];
+      light.g = frame[off + 1];
+      light.b = frame[off + 2];
+      light.tilt = Math.round((frame[off + 3] / 255) * 90);
+      light.pan = Math.round((frame[off + 4] / 255) * 360);
+      light.zoom = frame[off + 5];
+    }
+    function buildCodesysTxFrame() {
+      const frame = new Uint8Array(CODESYSCONFIG.maxFrameBytes);
+      lights.forEach(light => writeFocusToFrame(frame, light));
+      return frame;
+    }
+    function debugLightsState(label) {
+      if (!DEBUG_QB) return;
+
+      lights.forEach(light => {
+        console.log(
+          `[${label}] F${light.id} => ` +
+          `R=${Math.round(light.r)}, ` +
+          `G=${Math.round(light.g)}, ` +
+          `B=${Math.round(light.b)}, ` +
+          `TILT=${Math.round(light.tilt)}, ` +
+          `PAN=${Math.round(light.pan)}, ` +
+          `ZOOM=${Math.round(light.zoom)}`
+        );
+      });
+    }
+    function applyCodesysRxFrame(payload) {
+      if (!(payload instanceof Uint8Array) || payload.length === 0) return;
+
+      lights.forEach(light => {
+        readFocusFromFrame(payload, light);
+
+        const rig = document.getElementById(`rig-${light.id}`);
+        if (rig) {
+          rig.style.left = `${light.x}px`;
+          rig.style.top = `${light.y}px`;
+        }
+      });
+
+      if (selectedLightId) {
+        const sl = lights.find(l => l.id === selectedLightId);
+        if (sl) {
+          Object.keys(inputs).forEach(key => {
+            inputs[key].value = Math.round(sl[key]);
+          });
+          updateSlidersUI(sl);
+          syncColorPickerUI(sl);
+        }
+      }
+
+      renderAllBeams();
+      debugLightsState('ESTADO HTML');
+   }
+    function disconnectCodesys() {
+        if (codesysPollTimer) {
+            clearInterval(codesysPollTimer);
+            codesysPollTimer = null;
+        }
+        if (codesysSocket) {
+            try { codesysSocket.close(); } catch (_) {}
+            codesysSocket = null;
+        }
+        btnCodesysConnect.innerText = 'Connectar CODESYS';
+        setCodesysModeBadge(false);
+        setCodesysStatus('Desconnectat', 'neutral');
+    }
+    function requestCodesysSync() {
+        codesysPendingTx = true;
+    }
+    function flushCodesysSync() {
+      if (!isCodesysConnected()) return;
+      if (!codesysPendingTx) return;
+
+      const frame = buildCodesysTxFrame();
+      debugFrameQBs('TX HTML->CODESYS', frame);
+
+      try {
+        codesysSocket.send(frame);
+        codesysPendingTx = false;
+      } catch {
+        setCodesysStatus('Error enviant bytes', 'err');
+      }
+    }
+    function connectCodesys() {
+      if (isCodesysConnected()) return;
+
+      CODESYSCONFIG.pollMs = Math.max(20, parseInt(inCodesysLatency.value || 50, 10));
+      CODESYSCONFIG.baseQbOffset = Math.max(0, parseInt(inCodesysBaseQb.value || 0, 10));
+
+      setCodesysStatus('Connectant...', 'warn');
+
+      try {
+        codesysSocket = new WebSocket(CODESYSCONFIG.wsUrl);
+        codesysSocket.binaryType = 'arraybuffer';
+      } catch {
+        setCodesysStatus("No s'ha pogut obrir el socket", 'err');
+        return;
+      }
+
+      codesysSocket.addEventListener('open', () => {
+        setCodesysModeBadge(true);
+        setCodesysStatus('Connectat', 'ok');
+        btnCodesysConnect.innerText = 'Desconnectar';
+        requestCodesysSync();
+        codesysPollTimer = setInterval(flushCodesysSync, CODESYSCONFIG.pollMs);
+      });
+
+      codesysSocket.addEventListener('message', (event) => {
+        const data = event.data;
+
+        if (!(data instanceof ArrayBuffer)) {
+          return;
+        }
+
+        const rxFrame = new Uint8Array(data);
+        debugFrameQBs('RX CODESYS->HTML', rxFrame);
+        applyCodesysRxFrame(rxFrame);
+        codesysLastRxMs = performance.now();
+      });
+
+      codesysSocket.addEventListener('close', () => {
+        if (codesysPollTimer) clearInterval(codesysPollTimer);
+        codesysPollTimer = null;
+        setCodesysModeBadge(false);
+        btnCodesysConnect.innerText = 'Connectar CODESYS';
+        setCodesysStatus('Sessió tancada', 'warn');
+      });
+
+      codesysSocket.addEventListener('error', () => {
+        setCodesysStatus('Error de connexió bridge', 'err');
+      });
+    }
+
+    // Obté l'estat d'un focus dins d'una escena (o fallback a l'estat actual)
+    function getStateForLight(scene, lightId) {
+        return scene.lightsState.find(l => l.id === lightId)
+            || lights.find(l => l.id === lightId)
+            || { pan: 180, tilt: 0, r: 255, g: 255, b: 255, zoom: 128 };
+    }
+
+    // =======================================================================
+    // V2.0: GENERADOR DE LA SEQÜÈNCIA INTERPOLADA
+    // Retorna arrays de BYTE per a V, H, R, G, B, F i TIME per a T
+    // =======================================================================
+    function generateCoDeSysSequence(lightId) {
+        if (scenes.length === 0) return null;
+
+        const seqV=[], seqH=[], seqR=[], seqG=[], seqB=[], seqF=[], seqT=[];
+
+        // Afegeix un estat als arrays
+        function addState(state, t_ms) {
+            seqV.push(tiltToByte(state.tilt));
+            seqH.push(panToByte(state.pan));
+            seqR.push(clamp255(state.r));
+            seqG.push(clamp255(state.g));
+            seqB.push(clamp255(state.b));
+            seqF.push(clamp255(state.zoom));
+            seqT.push(Math.max(0, Math.round(t_ms)));
+        }
+
+        if (scenes.length === 1) {
+            // Un sol pas: seqüència estàtica
+            addState(getStateForLight(scenes[0], lightId), 0);
+            return { seqV, seqH, seqR, seqG, seqB, seqF, seqT };
+        }
+
+        // Genera les transicions entre passos consecutius
+        for (let i = 0; i < scenes.length - 1; i++) {
+            const trans = scenes[i].transition || defaultTransition();
+            const fromState = getStateForLight(scenes[i], lightId);
+            const toState   = getStateForLight(scenes[i + 1], lightId);
+
+            // Nombre de mostres: mínim 2, limitat per temps mínim
+            const N = Math.max(2, Math.floor(trans.durationMs / trans.minSampleMs));
+            // Temps real per mostra (sempre ≥ 50 ms)
+            const sampleMs = Math.max(50, Math.round(trans.durationMs / N));
+
+            // Mostres k=0..N-1 (el punt final (k=N) serà el punt inicial de la propera transició)
+            for (let k = 0; k < N; k++) {
+                const t    = k / N;
+                const ease = customEase(t, trans.easeIn, trans.easeOut);
+                const interp = {
+                    tilt: lerpVal(fromState.tilt, toState.tilt, ease),
+                    pan:  lerpVal(fromState.pan,  toState.pan,  ease),
+                    r:    lerpVal(fromState.r,    toState.r,    ease),
+                    g:    lerpVal(fromState.g,    toState.g,    ease),
+                    b:    lerpVal(fromState.b,    toState.b,    ease),
+                    zoom: lerpVal(fromState.zoom, toState.zoom, ease),
+                };
+                addState(interp, sampleMs);
+            }
+        }
+
+        // Afegim l'estat final de l'últim pas (t=1.0 de l'última transició)
+        const lastState = getStateForLight(scenes[scenes.length - 1], lightId);
+        addState(lastState, 0); // temps 0: fi de seqüència
+
+        return { seqV, seqH, seqR, seqG, seqB, seqF, seqT };
+    }
+
+    // =======================================================================
+    // V2.0: EXPORTACIÓ CODESYS — FORMAT LLISTES
+    // =======================================================================
+    function populateExportLightSelector() {
+        const sel = document.getElementById('export-light-select');
+        const prev = sel.value;
+        sel.innerHTML = '';
+        lights.forEach(l => {
+            const opt = document.createElement('option');
+            opt.value = l.id;
+            opt.text = `F${l.id}`;
+            sel.appendChild(opt);
+        });
+        if (prev) sel.value = prev;
+    }
+    function getLightsInExportOrder() {
+        return [...lights].sort((a, b) => a.id - b.id);
+    }
+    function formatByteArray(name, arr, X) {
+        const lines = [];
+        for (let i = 0; i < arr.length; i += 20) {
+            lines.push('    ' + arr.slice(i, i + 20).join(', '));
+        }
+        return `    ${name}: ARRAY[0..${X}] OF BYTE := [\n${lines.join(',\n')}\n    ];\n`;
+    }
+    function formatTimeArray(name, arr, X) {
+        const formatted = arr.map(t => `T#${t}ms`);
+        const lines = [];
+        for (let i = 0; i < formatted.length; i += 10) {
+            lines.push('    ' + formatted.slice(i, i + 10).join(', '));
+        }
+        return `    ${name}: ARRAY[0..${X}] OF TIME := [\n${lines.join(',\n')}\n    ];\n`;
+    }
+    function buildSTBlockForLight(lightId, seq) {
+        const { seqV, seqH, seqR, seqG, seqB, seqF, seqT } = seq;
+        const X = seqV.length - 1;
+        const totalMs = seqT.reduce((a, b) => a + b, 0);
+        let st = `// --- LLISTA DE LA SEQÜÈNCIA foco ${lightId}\n`;
+        st += `// Focus: F${lightId} | Passos: ${scenes.length} | Mostres: ${seqV.length} | Total: ${totalMs}ms\n`;
+        st += `// Generat per: HMI Simulador V2.0\n\n`;
+        st += formatByteArray(`Llista_V_foco_${lightId}`, seqV, X) + '\n';
+        st += formatByteArray(`Llista_H_foco_${lightId}`, seqH, X) + '\n';
+        st += formatByteArray(`Llista_R_foco_${lightId}`, seqR, X) + '\n';
+        st += formatByteArray(`Llista_G_foco_${lightId}`, seqG, X) + '\n';
+        st += formatByteArray(`Llista_B_foco_${lightId}`, seqB, X) + '\n';
+        st += formatByteArray(`Llista_F_foco_${lightId}`, seqF, X) + '\n';
+        st += formatTimeArray(`Llista_T_foco_${lightId}`, seqT, X) + '\n';
+        st += `    Fila_final_foco_${lightId}: INT := ${X};`;
+        return { st, totalMs, samples: seqV.length };
+    }
+    function buildCSVForLight(lightId, seq, includeFocusColumn = false) {
+        const { seqV, seqH, seqR, seqG, seqB, seqF, seqT } = seq;
+        let csv = includeFocusColumn
+            ? "Focus,Index,V_byte,H_byte,R,G,B,F_zoom,T_ms\n"
+            : "Index,V_byte,H_byte,R,G,B,F_zoom,T_ms\n";
+        for (let i = 0; i < seqV.length; i++) {
+            if (includeFocusColumn) csv += `${lightId},${i},${seqV[i]},${seqH[i]},${seqR[i]},${seqG[i]},${seqB[i]},${seqF[i]},${seqT[i]}\n`;
+            else csv += `${i},${seqV[i]},${seqH[i]},${seqR[i]},${seqG[i]},${seqB[i]},${seqF[i]},${seqT[i]}\n`;
+        }
+        return csv;
+    }
+    function generateAllSTCode() {
+        const orderedLights = getLightsInExportOrder();
+        const stBlocks = [];
+        let exportedCount = 0;
+        for (const light of orderedLights) {
+            const seq = generateCoDeSysSequence(light.id);
+            if (!seq) continue;
+            const block = buildSTBlockForLight(light.id, seq);
+            stBlocks.push(block.st);
+            exportedCount++;
+        }
+        return { st: stBlocks.join('\n\n'), exportedCount };
+    }
+    function generateAllCSVCode() {
+        const orderedLights = getLightsInExportOrder();
+        const blocks = [];
+        for (const light of orderedLights) {
+            const seq = generateCoDeSysSequence(light.id);
+            if (!seq) continue;
+            blocks.push(`# Focus F${light.id}`);
+            blocks.push(buildCSVForLight(light.id, seq, true).trimEnd());
+            blocks.push('');
+        }
+        return blocks.join('\n').trim() + '\n';
+    }
+
+    function generateExportCode() {
+        const lightId = parseInt(document.getElementById('export-light-select').value);
+        if (!lightId) return;
+
+        const seq = generateCoDeSysSequence(lightId);
+        if (!seq) return;
+
+        const { st, totalMs, samples } = buildSTBlockForLight(lightId, seq);
+        const infoEl = document.getElementById('export-info');
+        infoEl.textContent = `Focus F${lightId} · ${scenes.length} passos · ${samples} mostres · Durada total: ${totalMs}ms`;
+
+        document.getElementById('st-code-block').innerText = st;
+    }
+
+    // Obrir el modal
+    const modal = document.getElementById('export-modal');
+    document.getElementById('btn-export').addEventListener('click', () => {
+        if (scenes.length === 0 || lights.length === 0) return alert("Crea focus i guarda passos primer.");
+        populateExportLightSelector();
+        generateExportCode();
+        modal.classList.add('flex');
+    });
+    document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('flex'));
+
+    // Regenerar codi quan canvia el selector de focus
+    document.getElementById('export-light-select').addEventListener('change', generateExportCode);
+
+    // Copiar codi
+    document.getElementById('btn-copy-st').addEventListener('click', () => {
+        navigator.clipboard.writeText(document.getElementById('st-code-block').innerText).then(() => {
+            const btn = document.getElementById('btn-copy-st');
+            btn.innerText = "✅ Copiat!";
+            btn.classList.replace('bg-blue-600', 'bg-green-600');
+            setTimeout(() => { btn.innerText = "Copiar Focus"; btn.classList.replace('bg-green-600', 'bg-blue-600'); }, 2000);
+        });
+    });
+    document.getElementById('btn-copy-st-all').addEventListener('click', () => {
+        if (scenes.length === 0 || lights.length === 0) return alert("Crea focus i guarda passos primer.");
+        const { st, exportedCount } = generateAllSTCode();
+        navigator.clipboard.writeText(st).then(() => {
+            const btn = document.getElementById('btn-copy-st-all');
+            btn.innerText = `✅ ${exportedCount} focus copiats`;
+            btn.classList.replace('bg-indigo-600', 'bg-green-600');
+            setTimeout(() => {
+                btn.innerText = "Copiar Tots els Focus";
+                btn.classList.replace('bg-green-600', 'bg-indigo-600');
+            }, 2200);
+        });
+    });
+
+    // Descarregar CSV (diagnòstic — totes les mostres interpolades)
+    document.getElementById('btn-download-csv').addEventListener('click', () => {
+        const lightId = parseInt(document.getElementById('export-light-select').value);
+        const seq = generateCoDeSysSequence(lightId);
+        if (!seq) return;
+        const csv = buildCSVForLight(lightId, seq);
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        link.download = `seq_F${lightId}_codesys.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    });
+    document.getElementById('btn-copy-csv-all').addEventListener('click', () => {
+        if (scenes.length === 0 || lights.length === 0) return alert("Crea focus i guarda passos primer.");
+        const csvAll = generateAllCSVCode();
+        navigator.clipboard.writeText(csvAll).then(() => {
+            const btn = document.getElementById('btn-copy-csv-all');
+            btn.innerText = "✅ CSV copiat";
+            btn.classList.replace('bg-teal-600', 'bg-green-600');
+            setTimeout(() => {
+                btn.innerText = "Copiar CSV Tots";
+                btn.classList.replace('bg-green-600', 'bg-teal-600');
+            }, 2200);
+        });
+    });
+    document.getElementById('btn-download-csv-all').addEventListener('click', () => {
+        if (scenes.length === 0 || lights.length === 0) return alert("Crea focus i guarda passos primer.");
+        const csvAll = generateAllCSVCode();
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([csvAll], { type: 'text/csv;charset=utf-8;' }));
+        link.download = `seq_tots_els_focus_codesys.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    });
+
+    btnCodesysConnect.addEventListener('click', () => {
+        if (isCodesysConnected()) disconnectCodesys();
+        else connectCodesys();
+    });
+    inCodesysLatency.addEventListener('change', () => {
+      CODESYSCONFIG.pollMs = Math.max(20, parseInt(inCodesysLatency.value || 50, 10));
+      if (codesysPollTimer) clearInterval(codesysPollTimer);
+      codesysPollTimer = setInterval(flushCodesysSync, CODESYSCONFIG.pollMs);
+    });
+
+    inCodesysBaseQb.addEventListener('change', () => {
+     CODESYSCONFIG.baseQbOffset = Math.max(0, parseInt(inCodesysBaseQb.value || 0, 10));
+     requestCodesysSync();
+    });
+
+    // =======================================================================
+    // INIT
+    // =======================================================================
+    window.addEventListener('resize', renderAllBeams);
+    window.addEventListener('beforeunload', disconnectCodesys);
+    setCodesysModeBadge(false);
+    setCodesysStatus('Desconnectat', 'neutral');
+    updateScaleUI();
+    addLight(150, 200);
+    addLight(350, 200);
+    refreshLiveCapacityUI();
+</script>
+</body>
+</html>

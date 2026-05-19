@@ -1,0 +1,12 @@
+PROGRAM SCHEDULER
+VAR
+END_VAR
+
+
+----------------
+
+//-- crida comunicacions amb virtuari
+	COMMS();
+
+//-- crida programa principal de programació
+	MAIN();

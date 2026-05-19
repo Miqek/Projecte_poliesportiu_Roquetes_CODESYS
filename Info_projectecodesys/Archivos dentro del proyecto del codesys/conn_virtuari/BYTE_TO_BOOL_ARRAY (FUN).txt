@@ -1,0 +1,27 @@
+FUNCTION BYTE_TO_BOOL_ARRAY : ARRAY[0..7] OF BOOL
+VAR_INPUT
+    byte_in : BYTE;
+END_VAR
+VAR
+    i : INT;
+    temp_byte : BYTE;
+END_VAR
+VAR_OUTPUT
+    bool_array_out : ARRAY[0..7] OF BOOL;
+END_VAR
+
+
+----------------------
+
+FOR i := 0 TO 7 DO
+    temp_byte := SHR(byte_in, i) AND 1; 
+
+    IF temp_byte = 1 THEN
+        bool_array_out[i] := TRUE;
+    ELSE
+        bool_array_out[i] := FALSE;
+    END_IF
+END_FOR
+
+BYTE_TO_BOOL_ARRAY := bool_array_out;
+	

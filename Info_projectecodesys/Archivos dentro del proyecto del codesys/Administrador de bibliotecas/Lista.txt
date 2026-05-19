@@ -1,0 +1,23 @@
+Nombre	Espacio de nombres	Versión efectiva
+3SLicense = 3SLicense, 3.5.20.0 (CODESYS)	_3S_LICENSE	3.5.20.0
+BreakpointLogging = Breakpoint Logging Functions, 3.5.17.0 (3S - Smart Software Solutions GmbH)	BPLog	3.5.17.0
+CAA Device Diagnosis = CAA Device Diagnosis, 3.5.20.0 (CAA Technical Workgroup)	DED	3.5.20.0
+CmpDynamicText = CmpDynamicText, 3.5.20.0 (System)	CmpDynamicText	3.5.20.0
+IoStandard = IoStandard, 3.5.17.0 (System)	IoStandard	3.5.17.0
+Network Communication, 3.5.19.0 (3S - Smart Software Solutions GmbH)	Network_Communication	3.5.19.0
+Standard = Standard, 3.5.18.0 (System)	Standard	3.5.18.0
+SysMem = SysMem, 3.5.17.0 (System)	SysMem	3.5.17.0
+System_VisuElem3DPath = VisuElem3DPath, 4.5.0.0 (System)	VisuElem3DPath	4.5.0.0
+System_VisuElemBase = VisuElemBase, 4.5.0.0 (System)	VisuElemBase	4.5.0.0
+System_VisuElemCamDisplayer = VisuElemCamDisplayer, 4.5.0.0 (System)	VisuElemCamDisplayer	4.5.0.0
+System_VisuElemMeter = VisuElemMeter, 4.5.0.0 (System)	VisuElemMeter	4.5.0.0
+System_VisuElems = VisuElems, 4.5.0.0 (System)	VisuElems	4.5.0.0
+System_VisuElemsAlarm = VisuElemsAlarm, 4.5.0.0 (System)	VisuElemsAlarm	4.5.0.0
+System_VisuElemsDateTime = VisuElemsDateTime, 4.5.0.0 (System)	VisuElemsDateTime	4.5.0.0
+System_VisuElemsSpecialControls = VisuElemsSpecialControls, 4.5.0.0 (System)	VisuElemsSpecialControls	4.5.0.0
+System_VisuElemsWinControls = VisuElemsWinControls, 4.5.0.0 (System)	VisuElemsWinControls	4.5.0.0
+System_VisuElemTextEditor = VisuElemTextEditor, 4.5.0.0 (System)	VisuElemTextEditor	4.5.0.0
+System_VisuElemTrace = VisuElemTrace, 4.5.0.0 (System)	VisuElemTrace	4.5.0.0
+System_VisuElemXYChart = VisuElemXYChart, 4.5.0.0 (System)	VisuElemXYChart	4.5.0.0
+System_VisuInputs = VisuInputs, 4.5.0.0 (System)	VisuInputs	4.5.0.0
+System_VisuNativeControl = VisuNativeControl, 4.5.0.0 (System)	VisuNativeControl	4.5.0.0

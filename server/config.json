@@ -1,0 +1,26 @@
+{
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8090,
+    "staticDir": "../app"
+  },
+  "websocket": {
+    "host": "127.0.0.1",
+    "port": 8081
+  },
+  "codesys": {
+    "listenHost": "127.0.0.1",
+    "listenPort": 23452,
+    "frameBytes": 20
+  },
+  "virtuHome": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 23501,
+    "reconnectMs": 3000
+  },
+  "logging": {
+    "enabled": true,
+    "file": "../logs/bridge.log"
+  }
+}
